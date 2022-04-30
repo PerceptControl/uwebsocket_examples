@@ -1,0 +1,20 @@
+{
+  "name": "uwebsocket_examples",
+  "version": "1.0.0",
+  "description": "Examples for documentation of CivIO",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "node",
+    "ws",
+    "uws"
+  ],
+  "author": "Dorofeichik Egor <sa1rac.work@gmail.com>",
+  "license": "ISC",
+  "dependencies": {
+    "uuid": "^8.3.2",
+    "uWebSockets.js": "github:uNetworking/uWebSockets.js#v20.4.0"
+  }
+}

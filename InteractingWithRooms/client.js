@@ -1,3 +1,12 @@
+/**
+ * @Usage command: data
+ * Command list:
+ * - join: room
+ * - leave: room
+ * - register: name
+ * - send: message(send to all rooms which use user)
+ */
+
 var socket = new WebSocket('ws://localhost:3000/')
 
 class PacketManager {
@@ -58,10 +67,6 @@ class ChatController {
 
 var manager = new PacketManager()
 
-function createDataPacket(action, data) {
-  return JSON.stringify({ action: action, data: data })
-}
-
 socket.onopen = (e) => {
   console.log('[open] Соединение установлено')
 }
@@ -121,6 +126,7 @@ socket.onclose = async function (event) {
 var button = document.getElementById('btn')
 button.addEventListener('click', () => {
   let inputController = new InputController(document.getElementById('input'))
+
   switch (inputController.command) {
     case 'join': {
       data = PacketManager.newPacket('join', { room: inputController.data })

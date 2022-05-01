@@ -7,9 +7,8 @@ module.exports = class PacketManager {
     if (this.#data[nameOfProperty]) return this.#data[nameOfProperty]
   }
 
-  //Создаем сообщение формата 'code:data' из объекта
-  static newPacket(code, data) {
-    return JSON.stringify({ code: code, data: data })
+  static newPacket(code) {
+    return new Packet(code)
   }
 
   get code() {
@@ -20,5 +19,30 @@ module.exports = class PacketManager {
   set packet(packet) {
     this.#data = packet.data
     this.#code = packet.code
+  }
+}
+
+class Packet {
+  #data = {}
+  #code
+  constructor(code) {
+    this.#code = code
+  }
+
+  //Создаем сообщение формата 'code:data' из объекта
+  toString() {
+    return JSON.stringify({ code: this.#code, data: this.#data })
+  }
+
+  set message(message) {
+    this.#data.message = message
+  }
+
+  set author(author) {
+    this.#data.author = author
+  }
+
+  set id(id) {
+    this.#data.id = id
   }
 }

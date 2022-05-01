@@ -1,14 +1,13 @@
 module.exports = class PacketManager {
   #data
   #code
-  constructor() {}
-
-  get(nameOfProperty) {
-    if (this.#data[nameOfProperty]) return this.#data[nameOfProperty]
-  }
 
   static newPacket(code) {
     return new Packet(code)
+  }
+
+  get(nameOfProperty) {
+    if (this.#data[nameOfProperty]) return this.#data[nameOfProperty]
   }
 
   get code() {

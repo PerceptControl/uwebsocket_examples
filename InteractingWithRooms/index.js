@@ -1,15 +1,14 @@
 var uuid = require('uuid')
 
-var { StringDecoder } = require('string_decoder')
-var decoder = new StringDecoder('utf8')
-
 var uws = require('uWebSockets.js')
 var app = uws.App()
 
 var PacketManager = require('../packet-manager.js')
 
-//Конвертирует получаемые по сокетам данные в объект
+//Конвертирует получаемые по сокетам данные в объект(ArrayBuffer to String)
 function objectFromBuffer(bufferedData) {
+  const { StringDecoder } = require('string_decoder')
+  const decoder = new StringDecoder('utf8')
   return JSON.parse(decoder.write(Buffer.from(bufferedData)))
 }
 
@@ -42,7 +41,7 @@ var wsBehavior = {
       case 'join': {
         let room = manager.get('room')
 
-        //Информирующее сообщение пользователю
+        //Информирующее пользователя сообщение
         privatePacket = PacketManager.newPacket('private')
         privatePacket.author = 'system'
 
@@ -67,7 +66,7 @@ var wsBehavior = {
       case 'leave': {
         let room = manager.get('room')
 
-        //Информирующее сообщение пользователю
+        //Информирующее пользователя сообщение
         privatePacket = PacketManager.newPacket('private')
         privatePacket.author = 'system'
 
@@ -96,13 +95,13 @@ var wsBehavior = {
         privatePacket = PacketManager.newPacket('private')
         privatePacket.author = 'group'
 
-        //Отправка сообщения пользователя в каждую его группу
+        //Отправка сообщения пользователя во все группы, в которых он находится
         for (room of rooms) {
           privatePacket.message = `(${room} room) ${socket.id}: ${userMessage}`
           socket.publish(room, privatePacket.toString(), isBinary, compress)
         }
 
-        //Извещение пользователя о том, в какие группы и какое сообщение он отправил
+        //Сообщение пользователю в какие группы какое сообщение он отправил
         privatePacket.message = `(To ${rooms.join(', ')}) You: ${userMessage}`
         socket.send(privatePacket.toString(), isBinary, compress)
         break
@@ -124,6 +123,7 @@ var wsBehavior = {
     }
   },
 }
+
 //Создаем обработчик по адрессу ws://localhost:port/*
 app.ws('/*', wsBehavior)
 

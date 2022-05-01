@@ -12,20 +12,20 @@ var socket = new WebSocket('ws://localhost:3000/')
 class PacketManager {
   #data
   #code
-  constructor() {}
+
+  static newPacket(code) {
+    return JSON.stringify({ code: code, data: data })
+  }
 
   get(nameOfProperty) {
     if (this.#data[nameOfProperty]) return this.#data[nameOfProperty]
-  }
-
-  static newPacket(code, data) {
-    return JSON.stringify({ code: code, data: data })
   }
 
   get code() {
     return this.#code
   }
 
+  //Задаем текущий обрабатываемый пакет данных из сокета
   set packet(packet) {
     this.#data = packet.data
     this.#code = packet.code

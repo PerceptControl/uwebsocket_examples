@@ -1,13 +1,15 @@
-var uuid = require('uuid')
+import { PacketManager } from '../packet/packet-manager.mjs'
+import { PacketFactory } from '../packet/packet-factory.mjs'
 
-var uws = require('uWebSockets.js')
-var app = uws.App()
+import { v4 as uuidv4 } from 'uuid'
+import uWS from 'uWebSockets.js'
 
-var PacketManager = require('../packet-manager.js')
+import { StringDecoder } from 'string_decoder'
+
+var app = uWS.App()
 
 //Конвертирует получаемые по сокетам данные в объект(ArrayBuffer to String)
-function objectFromBuffer(bufferedData) {
-  const { StringDecoder } = require('string_decoder')
+async function objectFromBuffer(bufferedData) {
   const decoder = new StringDecoder('utf8')
   return JSON.parse(decoder.write(Buffer.from(bufferedData)))
 }
@@ -15,10 +17,8 @@ function objectFromBuffer(bufferedData) {
 //Создаем объект обработчика и привязываем к нему функции
 var wsBehavior = {
   open: (socket) => {
-    socket.id = uuid.v4()
-
-    data = PacketManager.newPacket('getId')
-    data.id = socket.id
+    socket.id = uuidv4()
+    let data = PacketFactory.createWithId('getId', socket.id)
 
     socket.send(data.toString(), true, true)
     console.log(`Socket ${socket.id} connected`)
@@ -28,31 +28,30 @@ var wsBehavior = {
     console.log(`Socket ${socket.id} disconnected with code: ${code}`)
   },
 
-  message: (socket, message) => {
+  message: async (socket, message) => {
     console.log(`[Get] data from socket ${socket.id}`)
-    isBinary = true
-    compress = true
+    let isBinary = true
+    let compress = true
 
     //Преобразуем данные в сообщении к объекту и передаем их в менеджер
-    manager = new PacketManager()
-    manager.packet = objectFromBuffer(message)
+    var manager = new PacketManager(await objectFromBuffer(message))
 
     switch (manager.code) {
       case 'join': {
         let room = manager.get('room')
 
         //Информирующее пользователя сообщение
-        privatePacket = PacketManager.newPacket('private')
-        privatePacket.author = 'system'
+        let privatePacket = PacketFactory.createWithAuthor('private', 'system')
 
         //Информирующее сообщение группе
-        systemPacket = PacketManager.newPacket('system')
-        systemPacket.message = `${socket.id} joined room ${room}`
+        let systemPacket = PacketFactory.create('system')
 
         if (socket.subscribe(room)) {
-          socket.publish(room, systemPacket.toString(), isBinary, compress)
+          let message = `${socket.id} joined room ${room}`
+          systemPacket.message = message
+          privatePacket.message = message
 
-          privatePacket.message = `joined room ${room}`
+          socket.publish(room, systemPacket.toString(), isBinary, compress)
           socket.send(privatePacket.toString(), isBinary, compress)
 
           console.log(`${socket.id} joined ${room}`)
@@ -67,22 +66,22 @@ var wsBehavior = {
         let room = manager.get('room')
 
         //Информирующее пользователя сообщение
-        privatePacket = PacketManager.newPacket('private')
-        privatePacket.author = 'system'
+        let privatePacket = PacketFactory.createWithAuthor('private', 'system')
 
         //Информирующее сообщение группе
-        systemPacket = PacketManager.newPacket('system')
-        systemPacket.message = `${socket.id} leaved room ${room}`
+        let systemPacket = PacketFactory.create('system')
 
         if (socket.unsubscribe(room)) {
-          socket.publish(room, systemPacket.toString(), isBinary, compress)
-
+          systemPacket.message = `${socket.id} leaved room ${room}`
           privatePacket.message = `leave room ${room}`
+
           socket.send(privatePacket.toString(), isBinary, compress)
+          socket.publish(room, systemPacket.toString(), isBinary, compress)
 
           console.log(`${socket.id} leaved ${room}`)
         } else {
           privatePacket.message = `Something went wrong when we tried to delete you from ${room}`
+
           socket.send(privatePacket.toString(), isBinary, compress)
         }
         break
@@ -90,29 +89,29 @@ var wsBehavior = {
 
       case 'send': {
         var rooms = socket.getTopics()
-        let userMessage = manager.get('message')
 
-        privatePacket = PacketManager.newPacket('private')
-        privatePacket.author = 'group'
+        var userId = socket.id
+        var userMessage = manager.get('message')
+
+        var privatePacket = PacketFactory.createWithAuthor('private', 'group')
 
         //Отправка сообщения пользователя во все группы, в которых он находится
-        for (room of rooms) {
-          privatePacket.message = `(${room} room) ${socket.id}: ${userMessage}`
+        rooms.forEach((currentRoom) => {
+          privatePacket.message = `(${currentRoom}) ${userId}: ${userMessage}`
           socket.publish(room, privatePacket.toString(), isBinary, compress)
-        }
+        })
 
         //Сообщение пользователю в какие группы какое сообщение он отправил
-        privatePacket.message = `(To ${rooms.join(', ')}) You: ${userMessage}`
+        privatePacket.message = `(${rooms.join(', ')}): ${userMessage}`
         socket.send(privatePacket.toString(), isBinary, compress)
         break
       }
 
       case 'register': {
-        let userLogin = manager.get('login')
+        let userLogin = manager.get('name')
 
-        privatePacket = PacketManager.newPacket('private')
-        privatePacket.author = 'system'
-        privatePacket.message = `set name ${userLogin}`
+        privatePacket = PacketFactory.createWithAuthor('private', 'system')
+        privatePacket.message = `Setted name ${userLogin}`
 
         console.log(`${socket.id} now is ${userLogin}`)
         socket.id = userLogin

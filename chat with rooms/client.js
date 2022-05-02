@@ -7,19 +7,34 @@
  * - send: message(send to all rooms which use user)
  */
 
-var socket = new WebSocket('ws://localhost:3000/')
+class Packet {
+  #data = {}
+
+  //Создаем сообщение формата 'code:data' из объекта
+  toString() {
+    return JSON.stringify(this.#data)
+  }
+
+  set(propertyName, propertyValue) {
+    this.#data[propertyName] = propertyValue
+  }
+}
+
+class PacketFactory {
+  static create(actionCode) {
+    let newPacket = new Packet()
+    newPacket.set('code', actionCode)
+    return newPacket
+  }
+}
 
 class PacketManager {
   #data
   #code
 
-  static newPacket(code) {
-    return JSON.stringify({ code: code, data: data })
-  }
-
-  //Задаем текущий обрабатываемый пакет данных из сокета
-  set packet(packet) {
-    this.#data = packet.data
+  //Задаем обрабатываемый пакет данных из сокета
+  constructor(packet) {
+    this.#data = packet
     this.#code = packet.code
   }
 
@@ -29,6 +44,10 @@ class PacketManager {
 
   get code() {
     return this.#code
+  }
+
+  get data() {
+    return this.#data
   }
 }
 
@@ -59,25 +78,35 @@ class ChatController {
     chat.appendChild(li)
   }
 
-  static system(message) {
+  static systemPrint(message) {
     var str = `system: ${message}`
     this.print(str)
   }
 }
 
-var manager = new PacketManager()
+//Объект Blob представляет из себя подобный файлу объект с неизменяемыми, необработанными данными
+async function socketDataToObject(data) {
+  if (data instanceof Blob) return JSON.parse(await data.text())
+  else if (data instanceof ArrayBuffer) {
+    return JSON.parse(new TextDecoder('utf-8').decode(await data))
+  }
+}
+
+var socket = new WebSocket('ws://localhost:3000/')
+//socket.binaryType = 'arraybuffer'
+
+let inputController = new InputController(document.getElementById('input'))
 
 socket.onopen = (e) => {
   console.log('[open] Соединение установлено')
 }
 
-socket.onmessage = async function (event) {
-  //Получаем текст сообщения из промиса
-  let data = await event.data.text()
-  console.log(`Данные получены: ${data}`)
+socket.onmessage = async function (socketData) {
+  console.log(await socketDataToObject(socketData.data))
+  let finalData = await socketDataToObject(socketData.data)
+  var manager = new PacketManager(finalData)
 
-  //Преобразуем строку 'код: сообщение' к объекту
-  manager.packet = JSON.parse(data)
+  console.log(`Данные получены: ${JSON.stringify(manager.data)}`)
 
   switch (manager.code) {
     case 'getId': {
@@ -89,7 +118,7 @@ socket.onmessage = async function (event) {
       let author = manager.get('author')
       switch (author) {
         case 'system': {
-          ChatController.system(manager.get('message'))
+          ChatController.systemPrint(manager.get('message'))
           break
         }
 
@@ -105,7 +134,7 @@ socket.onmessage = async function (event) {
     }
 
     case 'system': {
-      ChatController.system(manager.get('message'))
+      ChatController.systemPrint(manager.get('message'))
       break
     }
   }
@@ -125,35 +154,37 @@ socket.onclose = async function (event) {
 
 var button = document.getElementById('btn')
 button.addEventListener('click', () => {
-  let inputController = new InputController(document.getElementById('input'))
+  data = PacketFactory.create(inputController.command)
 
   switch (inputController.command) {
     case 'join': {
-      data = PacketManager.newPacket('join', { room: inputController.data })
-      socket.send(data)
+      data.set('room', inputController.data)
       inputController.clear()
+
+      socket.send(data)
       break
     }
 
     case 'leave': {
-      data = PacketManager.newPacket('leave', { room: inputController.data })
+      data.set('room', inputController.data)
       inputController.clear()
+
       socket.send(data)
       break
     }
 
     case 'send': {
-      data = PacketManager.newPacket('send', { message: inputController.data })
+      data.set('message', inputController.data)
       inputController.clear()
+
       socket.send(data)
       break
     }
 
     case 'register': {
-      data = PacketManager.newPacket('register', {
-        login: inputController.data,
-      })
+      data.set('name', inputController.data)
       inputController.clear()
+
       socket.send(data)
       break
     }

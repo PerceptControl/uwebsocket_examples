@@ -10,7 +10,6 @@
 class Packet {
   #data = {}
 
-  //Создаем сообщение формата 'code:data' из объекта
   toString() {
     return JSON.stringify(this.#data)
   }
@@ -56,6 +55,11 @@ class InputController {
   constructor(inputObject) {
     this.#input = inputObject
   }
+
+  alert(message) {
+    ChatController.print(message)
+  }
+
   clear() {
     this.#input.value = ''
   }
@@ -65,7 +69,22 @@ class InputController {
   }
 
   get data() {
-    return this.#input.value.split(':')[1].trim()
+    switch (this.#length) {
+      case 2:
+        return this.#input.value.split(':')[1].trim()
+
+      case 3: {
+        let inputs = this.#input.value.split(':')
+        return {
+          subcommand: inputs[1].trim(),
+          message: inputs[2].trim(),
+        }
+      }
+    }
+  }
+
+  get #length() {
+    return this.#input.value.split(':').length
   }
 }
 
@@ -84,8 +103,8 @@ class ChatController {
   }
 }
 
-//Объект Blob представляет из себя подобный файлу объект с неизменяемыми, необработанными данными
 async function socketDataToObject(data) {
+  //Объект Blob представляет из себя подобный файлу объект с неизменяемыми, необработанными данными
   if (data instanceof Blob) return JSON.parse(await data.text())
   else if (data instanceof ArrayBuffer) {
     return JSON.parse(new TextDecoder('utf-8').decode(await data))
@@ -93,7 +112,7 @@ async function socketDataToObject(data) {
 }
 
 var socket = new WebSocket('ws://localhost:3000/')
-//socket.binaryType = 'arraybuffer'
+socket.binaryType = 'arraybuffer'
 
 let inputController = new InputController(document.getElementById('input'))
 
@@ -102,7 +121,6 @@ socket.onopen = (e) => {
 }
 
 socket.onmessage = async function (socketData) {
-  console.log(await socketDataToObject(socketData.data))
   let finalData = await socketDataToObject(socketData.data)
   var manager = new PacketManager(finalData)
 
@@ -123,6 +141,11 @@ socket.onmessage = async function (socketData) {
         }
 
         case 'group': {
+          ChatController.print(manager.get('message'))
+          break
+        }
+
+        case 'user': {
           ChatController.print(manager.get('message'))
           break
         }
@@ -154,39 +177,61 @@ socket.onclose = async function (event) {
 
 var button = document.getElementById('btn')
 button.addEventListener('click', () => {
-  data = PacketFactory.create(inputController.command)
+  dataPacket = PacketFactory.create(inputController.command)
 
   switch (inputController.command) {
     case 'join': {
-      data.set('room', inputController.data)
+      dataPacket.set('room', inputController.data)
       inputController.clear()
 
-      socket.send(data)
+      socket.send(dataPacket.toString())
       break
     }
 
     case 'leave': {
-      data.set('room', inputController.data)
+      dataPacket.set('room', inputController.data)
       inputController.clear()
 
-      socket.send(data)
+      socket.send(dataPacket.toString())
       break
     }
 
     case 'send': {
-      data.set('message', inputController.data)
+      dataPacket.set('message', inputController.data)
       inputController.clear()
 
-      socket.send(data)
+      socket.send(dataPacket.toString())
+      break
+    }
+
+    case 'sendToRoom': {
+      dataPacket.set('roomName', inputController.data.subcommand)
+      dataPacket.set('message', inputController.data.message)
+      inputController.clear()
+
+      socket.send(dataPacket.toString())
+      break
+    }
+
+    case 'sendTo': {
+      dataPacket.set('destination', inputController.data.subcommand)
+      dataPacket.set('message', inputController.data.message)
+      inputController.clear()
+
+      socket.send(dataPacket.toString())
       break
     }
 
     case 'register': {
-      data.set('name', inputController.data)
+      dataPacket.set('name', inputController.data)
       inputController.clear()
 
-      socket.send(data)
+      socket.send(dataPacket.toString())
       break
+    }
+
+    default: {
+      inputController.alert('No such command')
     }
   }
 })

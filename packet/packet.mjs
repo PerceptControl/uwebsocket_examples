@@ -6,8 +6,8 @@ export class Packet {
     return JSON.stringify(this.#data)
   }
 
-  set(property) {
-    this.#data[property.name] = property.value
+  set(propertyName, propertyValue) {
+    this.#data[propertyName] = propertyValue
   }
 
   set message(message) {

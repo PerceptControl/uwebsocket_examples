@@ -103,7 +103,7 @@ class ChatController {
   }
 }
 
-async function socketDataToObject(data) {
+async function objectFromBinary(data) {
   //Объект Blob представляет из себя подобный файлу объект с неизменяемыми, необработанными данными
   if (data instanceof Blob) return JSON.parse(await data.text())
   else if (data instanceof ArrayBuffer) {
@@ -120,12 +120,10 @@ socket.onopen = (e) => {
   console.log('[open] Соединение установлено')
 }
 
-socket.onmessage = async function (socketData) {
-  let finalData = await socketDataToObject(socketData.data)
-  var manager = new PacketManager(finalData)
+socket.onmessage = async function (binary) {
+  let packet = await objectFromBinary(binary.data)
 
-  console.log(`Данные получены: ${JSON.stringify(manager.data)}`)
-
+  var manager = new PacketManager(packet)
   switch (manager.code) {
     case 'getId': {
       socket.id = manager.get('id')

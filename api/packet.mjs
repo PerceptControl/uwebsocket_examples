@@ -1,7 +1,6 @@
 export class Packet {
   #data = {}
 
-  //Создаем сообщение формата 'code:data' из объекта
   toString() {
     return JSON.stringify(this.#data)
   }

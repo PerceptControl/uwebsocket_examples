@@ -1,5 +1,6 @@
-import { PacketManager } from '../packet/packet-manager.mjs'
-import { PacketFactory } from '../packet/packet-factory.mjs'
+import { PacketManager } from '../api/packet-manager.mjs'
+import { PacketFactory } from '../api/packet-factory.mjs'
+import { SocketPoolController } from '../api/socketPool.mjs'
 
 import { v4 as uuidv4 } from 'uuid'
 import uWS from 'uWebSockets.js'
@@ -14,37 +15,38 @@ async function objectFromBuffer(bufferedData) {
   return JSON.parse(decoder.write(Buffer.from(bufferedData)))
 }
 
-//Карта для хранения всех сокетов
-var socketMap = new Map()
+//API для манипуляции пулом сокетов
+var socketPool = new SocketPoolController()
 
 //Создаем объект обработчика и привязываем к нему функции
 var wsBehavior = {
   open: (socket) => {
     socket.id = uuidv4()
-    socketMap.set(socket.id, socket)
+    socketPool.set(socket.id, socket)
 
-    let data = PacketFactory.createWithId('getId', socket.id)
+    let packet = PacketFactory.createWithId('getId', socket.id)
 
-    socket.send(data.toString(), true, true)
+    socket.send(packet.toString(), true, true)
     console.log(`Socket ${socket.id} connected`)
   },
 
   close: (socket, code) => {
-    socketMap.delete(socket.id)
+    socketPool.delete(socket.id)
     console.log(`Socket ${socket.id} disconnected with code: ${code}`)
   },
 
-  message: async (socket, message) => {
-    console.log(`[Get] data from socket ${socket.id}`)
+  message: async (userSocket, message) => {
+    console.log(`[Get] data from socket ${userSocket.id}`)
     let isBinary = true
     let compress = true
 
-    //Преобразуем данные в сообщении к объекту и передаем их в менеджер
-    var manager = new PacketManager(await objectFromBuffer(message))
+    const currentPacket = await objectFromBuffer(message)
+    var manager = new PacketManager(currentPacket)
 
     switch (manager.code) {
       case 'join': {
         let room = manager.get('room')
+        let userName = userSocket.id
 
         //Информирующее пользователя сообщение
         let privatePacket = PacketFactory.createWithAuthor('private', 'system')
@@ -52,94 +54,94 @@ var wsBehavior = {
         //Информирующее сообщение группе
         let systemPacket = PacketFactory.create('system')
 
-        if (socket.subscribe(room)) {
-          let message = `${socket.id} joined room ${room}`
+        if (userSocket.subscribe(room)) {
+          let message = `${userName} joined room ${room}`
           systemPacket.message = message
           privatePacket.message = message
 
-          socket.publish(room, systemPacket.toString(), isBinary, compress)
-          socket.send(privatePacket.toString(), isBinary, compress)
+          userSocket.publish(room, systemPacket.toString(), isBinary, compress)
+          userSocket.send(privatePacket.toString(), isBinary, compress)
 
-          console.log(`${socket.id} joined ${room}`)
+          console.log(`${userName} joined ${room}`)
         } else {
           privatePacket.message = `Something went wrong when we added You to room ${room}`
-          socket.send(privatePacket.toString(), isBinary, compress)
+          userSocket.send(privatePacket.toString(), isBinary, compress)
         }
         break
       }
 
       case 'leave': {
+        let userName = userSocket.id
         let room = manager.get('room')
 
         //Информирующее пользователя сообщение
         let privatePacket = PacketFactory.createWithAuthor('private', 'system')
 
-        //Информирующее сообщение группе
+        //Информирующее системное сообщение группе
         let systemPacket = PacketFactory.create('system')
 
-        if (socket.unsubscribe(room)) {
-          systemPacket.message = `${socket.id} leaved room ${room}`
-          privatePacket.message = `leave room ${room}`
+        if (userSocket.unsubscribe(room)) {
+          systemPacket.message = `${userName} leaved room ${room}`
+          privatePacket.message = `leaved room ${room}`
 
-          socket.send(privatePacket.toString(), isBinary, compress)
-          socket.publish(room, systemPacket.toString(), isBinary, compress)
+          userSocket.send(privatePacket.toString(), isBinary, compress)
+          userSocket.publish(room, systemPacket.toString(), isBinary, compress)
 
-          console.log(`${socket.id} leaved ${room}`)
+          console.log(`${userName} leaved ${room}`)
         } else {
           privatePacket.message = `Something went wrong when we tried to delete you from ${room}`
-
-          socket.send(privatePacket.toString(), isBinary, compress)
+          userSocket.send(privatePacket.toString(), isBinary, compress)
         }
         break
       }
 
       case 'send': {
-        var rooms = socket.getTopics()
+        var rooms = userSocket.getTopics()
 
-        var userId = socket.id
+        var userName = userSocket.id
         var userMessage = manager.get('message')
 
         let privatePacket = PacketFactory.createWithAuthor('private', 'group')
 
         //Отправка сообщения пользователя во все группы, в которых он находится
         rooms.forEach((room) => {
-          privatePacket.message = `(${room}) ${userId}: ${userMessage}`
-          socket.publish(room, privatePacket.toString(), isBinary, compress)
+          privatePacket.message = `(${room}) ${userName}: ${userMessage}`
+          userSocket.publish(room, privatePacket.toString(), isBinary, compress)
         })
 
         //Сообщение пользователю в какие группы какое сообщение он отправил
         privatePacket.message = `(${rooms.join(', ')}): ${userMessage}`
-        socket.send(privatePacket.toString(), isBinary, compress)
+        userSocket.send(privatePacket.toString(), isBinary, compress)
         break
       }
 
       case 'sendTo': {
         var destination = manager.get('destination')
         var userMessage = manager.get('message')
-        var userName = socket.id
+        var userName = userSocket.id
 
         let privatePacket = PacketFactory.createWithAuthor('private', 'user')
 
-        let destinationSocket = socketMap.get(destination)
+        let destinationSocket = socketPool.get(destination)
         if (destinationSocket === undefined) {
           systemPacket.message = `No such user ${destination}`
-          socket.send(systemPacket.toString(), isBinary, compress)
+          userSocket.send(systemPacket.toString(), isBinary, compress)
         } else {
           let message = `(${userName} to ${destination}): ${userMessage}`
           privatePacket.message = message
 
           destinationSocket.send(privatePacket.toString(), isBinary, compress)
-          socket.send(privatePacket.toString(), isBinary, compress)
+          userSocket.send(privatePacket.toString(), isBinary, compress)
         }
         break
       }
 
       case 'sendToRoom': {
         var room = manager.get('roomName')
-        var userId = socket.id
+        var userName = userSocket.id
         var userMessage = manager.get('message')
 
-        let systemMessage = `(${room}) ${userId}: ${userMessage}`
+        let systemMessage = `(${room}) ${userName}: ${userMessage}`
 
         let privatePacket = PacketFactory.createWithAuthor('private', 'group')
         privatePacket.message = systemMessage
@@ -147,31 +149,34 @@ var wsBehavior = {
         let systemPacket = PacketFactory.create('system')
         systemPacket.message = systemMessage
 
-        socket.publish(room, privatePacket.toString(), isBinary, compress)
-        socket.send(systemPacket.toString(), isBinary, compress)
+        userSocket.publish(room, privatePacket.toString(), isBinary, compress)
+        userSocket.send(systemPacket.toString(), isBinary, compress)
         break
       }
 
       case 'register': {
-        let userName = manager.get('name')
+        let newName = manager.get('name')
+        let previousName = userSocket.id
 
         let privatePacket = PacketFactory.createWithAuthor('private', 'system')
 
-        if (socketMap.has(userName)) {
-          privatePacket.message = `User ${userName} already exist`
-          socket.send(privatePacket.toString(), isBinary, compress)
+        if (socketPool.has(newName)) {
+          privatePacket.message = `User ${newName} already exist`
+          userSocket.send(privatePacket.toString(), isBinary, compress)
           break
         }
-        privatePacket.message = `Setted name ${userName}`
+        privatePacket.message = `Setted name ${newName}`
 
-        console.log(`${socket.id} now is ${userName}`)
+        console.log(`${previousName} now is ${newName}`)
 
-        socketMap.set(userName, socket)
-        socketMap.delete(socket.id)
+        try {
+          socketPool.swapKey(previousName, newName)
+        } catch (e) {
+          console.log(e)
+        }
+        userSocket.id = newName
 
-        socket.id = userName
-
-        socket.send(privatePacket.toString(), isBinary, compress)
+        userSocket.send(privatePacket.toString(), isBinary, compress)
         break
       }
     }

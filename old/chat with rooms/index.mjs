@@ -24,7 +24,7 @@ var wsBehavior = {
     socket.id = uuidv4()
     socketPool.set(socket.id, socket)
 
-    let packet = PacketFactory.createWithId('getId', socket.id)
+    packet = PacketFactory.createWithId('getId', socket.id)
 
     socket.send(packet.toString(), true, true)
     console.log(`Socket ${socket.id} connected`)

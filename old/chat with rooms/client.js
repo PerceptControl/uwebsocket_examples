@@ -111,13 +111,36 @@ async function objectFromBinary(data) {
   }
 }
 
-var socket = new WebSocket('ws://localhost:3000/')
+var socket = new WebSocket('ws://localhost:3000/test2')
+socket.binaryType = 'arraybuffer'
+
+socket.onopen = (e) => {
+  console.log('[open] Соединение установлено')
+}
+
+socket.send(
+  JSON.stringify({ meta: { event: 'join' }, data: { roomName: 'test2' } }),
+)
+
+socket = new WebSocket('ws://localhost:3000/')
+socket.onopen = (e) => {
+  console.log('[open] Соединение установлено')
+}
+
+socket.send(
+  JSON.stringify({ meta: { event: 'join' }, data: { roomName: 'test' } }),
+)
+
+var socket = new WebSocket('ws://localhost:3000/test')
 socket.binaryType = 'arraybuffer'
 
 let inputController = new InputController(document.getElementById('input'))
 
 socket.onopen = (e) => {
   console.log('[open] Соединение установлено')
+  socket.send(
+    JSON.stringify({ meta: { event: 'join' }, data: { roomName: 'test' } }),
+  )
 }
 
 socket.onmessage = async function (binary) {

@@ -1,4 +1,4 @@
-import { Server } from 'usocket.io'
+import { Server } from 'gamesocket.io'
 
 let main = Server.namespace('main')
 

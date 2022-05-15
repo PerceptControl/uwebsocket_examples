@@ -15,7 +15,7 @@
   "license": "ISC",
   "dependencies": {
     "0http": "^3.1.2",
-    "usocket.io": "^1.0.4",
+    "gamesocket.io": "^1.0.2",
     "uuid": "^8.3.2",
     "uWebSockets.js": "github:uNetworking/uWebSockets.js#v20.4.0"
   }
